@@ -1,6 +1,6 @@
 /**
-*   Author: Cem Aydın & Dünya Cengiz
-*  (c) Copyright by Mosa Technologies.
+    Author: Cem Aydın & Dünya Cengiz
+   (c) Copyright by Mosa Technologies.
 **/
 
 #include <WiFi.h>
@@ -9,6 +9,10 @@
 #include <time.h>
 #include <GD23Z.h>
 #include "default_assets.h"
+
+
+
+
 
 #define WIFI_SSID "Camber"
 #define WIFI_PASSWORD "12345678"
@@ -28,21 +32,21 @@ extern "C" {
 
 char sensordata[INPUTCOUNT][10];//2d Char array to temporarily store sensor data
 char* config_data[5];//Char array to store config payload
-int display_mode,i1, i2, i3, i4; //Configuration elements
+int display_mode, i1, i2, i3, i4; //Configuration elements
 char* tags[INPUTCOUNT] = {"TWS", "TWA", "AWS", "AWA", "BS", "HEEL", "DPTH"};
 bool tws, twa, aws, awa, bs, heel, dpth = 0; // Bool for configuration; if requested by config => 1 else =>0
 bool conf_s, tws_s, twa_s, aws_s, awa_s, bs_s, heel_s, dpth_s; //Subscription state for mqtt channel; subscribed => 1 not-subscribed=>0
 
 char starttime_str[15];
 int starttime;
-char timenow[50]; //time 
+char timenow[50]; //time
 TaskHandle_t TaskHandle_1;
 
 AsyncMqttClient mqttClient;
 TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
 
-String chipId,ownconfig,ownstate;
+String chipId, ownconfig, ownstate;
 
 //================ Functions Begin ==================
 
@@ -78,10 +82,10 @@ void onMqttConnect(bool sessionPresent) {
   Serial.println("Connected to MQTT.");
   Serial.print("Session present: ");
   Serial.println(sessionPresent);
-  mqttClient.publish(ownstate.c_str(), 0, 1, "Online",strlen("Online"));
-  
+  mqttClient.publish(ownstate.c_str(), 0, 1, "Online", strlen("Online"));
+
   uint16_t config_packet = mqttClient.subscribe(ownconfig.c_str(), 0);
-  
+
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -407,13 +411,17 @@ void printLocalTime() {
 void setup() {
   GD.begin();
   LOAD_ASSETS();
+  GD.ClearColorRGB(0x000015);
+  GD.Clear();
+  GD.cmd_text(GD.w / 2, GD.h / 2, 31, OPT_CENTER, "Hello world");
+  GD.swap();
   Serial.begin(115200);
 
-  
+
   chipId = String((uint32_t)ESP.getEfuseMac(), HEX);
   ownconfig = String("display/" + chipId + "/config");
   ownstate = String("display/" + chipId + "/state");
-  
+
   WiFi.onEvent(WiFiEvent);
 
   mqttClient.onConnect(onMqttConnect);
@@ -422,13 +430,15 @@ void setup() {
   mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
   mqttClient.onPublish(onMqttPublish);
+  delay(2000);
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  mqttClient.setWill(ownstate.c_str(), 0, 1, "Offline",strlen("Offline"));
-  
+  mqttClient.setWill(ownstate.c_str(), 0, 1, "Offline", strlen("Offline"));
+
   connectToWifi();
 
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   xTaskCreate(timeEngine, "TimeEngine", 10000, NULL, 1, &TaskHandle_1);
+  
 }
 
 
