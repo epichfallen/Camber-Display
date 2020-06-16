@@ -64,6 +64,7 @@ TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
 
 String chipId, ownconfig, ownstate, ownreset;
+int firsttime = 0; //first time use?
 
 
 //================ Functions Begin ==================
@@ -265,6 +266,8 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
       EEPROM.write(i, 0);
     }
     EEPROM.commit();
+    GD.Clear();
+    delay(2000);
     ESP.restart();
   }
 
@@ -435,8 +438,7 @@ void printLocalTime() {
 void setup() {
   GD.begin();
   LOAD_ASSETS();
-  logo_debug("Loading Resources");
-  
+
   Serial.begin(115200);
   WiFi.disconnect();
   EEPROM.begin(512); //Initialasing EEPROM
@@ -450,6 +452,7 @@ void setup() {
 
   //---------------------------------------- Read eeprom for ssid and pass
   Serial.println("Reading EEPROM ssid");
+  logo_debug("Connecting to Camber Server");
 
   String esid;
   for (int i = 0; i < 32; ++i)
@@ -460,15 +463,18 @@ void setup() {
   Serial.print("SSID: ");
   Serial.println(esid);
   Serial.println("Reading EEPROM pass");
-
   String epass = "";
   for (int i = 32; i < 96; ++i)
   {
     epass += char(EEPROM.read(i));
   }
 
-  Serial.print("PASS: ");
-  Serial.println(epass);
+  if (esid.indexOf("Camber") >= 0) {
+    Serial.print("found a pass");
+  } else {
+    firsttime = 1;
+    Serial.print("no password saved");
+  }
 
 
   WiFi.begin(esid.c_str(), epass.c_str());
@@ -498,9 +504,18 @@ void setup() {
   }
   else
   {
-    Serial.println("Turning the HotSpot On");
-    launchWeb();
-    setupAP();// Setup HotSpot
+
+    if (firsttime == 1) {
+      Serial.println("Turning the HotSpot On");
+      launchWeb();
+      setupAP();// Setup HotSpot
+    } else {
+      logo_debug("Couldn't connect to a server. Maybe the server is off?");
+      delay(5000);
+      logo_debug("Restarting device...");
+      delay(2000);
+      ESP.restart();
+    }
   }
 
   Serial.println();
@@ -586,20 +601,27 @@ static void timeEngine(void* pvParameters)
 //----------------------------------------------- Fuctions used for WiFi credentials saving and connecting to it which you do not need to change
 bool testWifi(void)
 {
-  int c = 0;
-  Serial.println("Waiting for Wifi to connect");
-  while ( c < 20 ) {
-    if (WiFi.status() == WL_CONNECTED)
-    {
-      return true;
+  if (firsttime == 0) {
+    int c = 0;
+    Serial.println("Waiting for Wifi to connect");
+    while ( c < 40 ) {
+      if (WiFi.status() == WL_CONNECTED)
+      {
+        return true;
+      }
+      delay(1000);
+      Serial.print("*");
+      c++;
+      if (c == 20) {
+        logo_debug("Couldn't connect. Waiting 20 more seconds...");
+      }
     }
-    delay(500);
-    Serial.print("*");
-    c++;
+    Serial.println("");
+    Serial.println("Connect timed out");
+    return false;
+  } else {
+    return false;
   }
-  Serial.println("");
-  Serial.println("Connect timed out, opening AP");
-  return false;
 }
 
 void launchWeb()
@@ -619,6 +641,7 @@ void launchWeb()
 
 void setupAP(void)
 {
+  logo_debug("Turning the ap mode on. Please wait...");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
@@ -660,8 +683,10 @@ void setupAP(void)
   st += "</ol>";
   delay(100);
   WiFi.softAP("Camber Display", "12345678");
+  logo_debug("AP mode on. Connect to this device through wifi, using password: 12345678");
   Serial.println("softap");
   launchWeb();
+
   Serial.println("over");
 }
 
@@ -671,8 +696,9 @@ void createWebServer()
     server.on("/", []() {
 
       IPAddress ip = WiFi.softAPIP();
+      logo_debug("Camber Display is now being configured.");
       String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-      content = "<!DOCTYPE HTML>\r\n<html>Hello from ESP32 at ";
+      content = "<!DOCTYPE HTML>\r\n<html>Camber Display ";
       content += "<form action=\"/scan\" method=\"POST\"><input type=\"submit\" value=\"scan\"></form>";
       content += ipStr;
       content += "<p>";
@@ -718,9 +744,10 @@ void createWebServer()
           Serial.println(qpass[i]);
         }
         EEPROM.commit();
-
+        logo_debug("Wifi settings successfully updated! Restarting in 5 seconds...");
         content = "{\"Success\":\"saved to eeprom... reset to boot into new wifi\"}";
         statusCode = 200;
+        delay(5000);
         ESP.restart();
       } else {
         content = "{\"Error\":\"404 not found\"}";
